@@ -1,0 +1,7 @@
+- Row level transformation – map, flatMap
+- Filtering Data – filter
+- Performing aggregations – reduceByKey, aggregateByKey
+- Joins – join, leftOuterJoin, rightOuterJoin
+- Sorting and Ranking – sortByKey, groupByKey
+- Set Operations – union, intersection, distinct
+

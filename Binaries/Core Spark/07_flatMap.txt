@@ -1,0 +1,9 @@
+
+- Performing row level transformations where one record will be transformed into array of records
+- Number of records in output RDD will be typically more than number of records in input RDD
+
+val l = List("Hello", "How are you doing", "Good")
+val l_rdd = sc.parallelize(l)
+val l_map = l_rdd.map(ele => ele.split(" "))
+val l_flatMap = l_rdd.flatMap(ele => ele.split(" "))
+val wordcount = l_flatMap.map(word => (word, "")).countByKey

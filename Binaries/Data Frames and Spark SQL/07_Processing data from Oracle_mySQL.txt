@@ -1,0 +1,111 @@
+package com.javachain
+ 
+import org.apache.spark.sql.SparkSession
+import org.apache.spark.{SparkConf, SparkContext}
+import org.apache.spark.sql.{Row, SQLContext, SaveMode}
+import org.apache.spark.sql.hive.HiveContext
+import org.apache.spark.sql.functions.col
+import org.apache.spark.sql.functions._
+import org.apache.spark.sql.types._
+import org.apache.spark.sql._
+import org.apache.spark.rdd.RDD 
+import org.apache.spark.sql.Row
+import org.apache.spark.sql.expressions.Window
+ 
+object Javachain_sqoop
+{
+def main(args: Array[String]): Unit = {
+ 
+val conf = new SparkConf().setAppName(this.getClass.getSimpleName)
+val sc = new SparkContext(conf)
+val sqlContext = new SQLContext(sc)
+val hiveContext = new HiveContext(sc)
+ 
+hiveContext.sql("SET hive.exec.dynamic.partition = true")
+hiveContext.sql("SET hive.exec.dynamic.partition.mode = nonstrict")
+hiveContext.sql("SET hive.exec.max.dynamic.partitions.pernode = 400")
+sc.addJar("hdfs://javachain.com/lib/ojdbc6.jar")
+ 
+val ds = args(0)
+val cur = args(1)
+ 
+val df1 = sqlContext.read.format("jdbc")
+.option("url", "jdbc:oracle:thin:@xxxx-xxx.xxx.javachain.com:01/javachainDB")
+.option("dbtable", "Javachain_Oracle.Javachain_log")
+.option("user", "javachain")
+.option("password", "website")
+.option("dbtable", s"(SELECT EMP, TRIM(REGEXP_REPLACE(REQUEST, '([[:space:]][[:space:]]+)|([[:cntrl:]]+)', ' ')) as REQUEST, 'West' AS DATACENTER, '${ds}' as ds from Javachain_Oracle.Javachain_log WHERE log_timestamp >= TO_DATE((CURRENT_DATE - INTERVAL '1' DAY)) AND log_timestamp < TO_DATE((CURRENT_DATE - INTERVAL '0' DAY)))")
+.option("lowerBound",1L)
+.option("upperBound",100000L)
+.option("numPartitions",100)
+.option("fetchSize", "1000")
+.load()
+ 
+val TDC = df1.toDF
+ 
+val df2 = sqlContext.read.format("jdbc")
+.option("url", "jdbc:oracle:thin:@xxxx-xxx.xxx.javachain.com:02/javachainDB")
+.option("dbtable", "Javachain_Oracle.Javachain_log")
+.option("user", "javachain")
+.option("password", "website")
+.option("dbtable", s"(SELECT EMP, TRIM(REGEXP_REPLACE(REQUEST, '([[:space:]][[:space:]]+)|([[:cntrl:]]+)', ' ')) as REQUEST, 'EAST' AS DATACENTER, '${ds}' as ds from Javachain_Oracle.Javachain_log WHERE log_timestamp >= TO_DATE((CURRENT_DATE - INTERVAL '1' DAY)) AND log_timestamp < TO_DATE((CURRENT_DATE - INTERVAL '0' DAY)))")
+.option("lowerBound",1L)
+.option("upperBound",100000L)
+.option("numPartitions",100)
+.option("fetchSize", "1000")
+.load()
+ 
+val ODC = df2.toDF
+ 
+val df3 = sqlContext.read.format("jdbc")
+.option("url", "jdbc:oracle:thin:@xxxxx-xxx.west.javachain.com:03/javachainDB")
+.option("dbtable", "Javachain_Oracle.Javachain_log")
+.option("user", "javachain")
+.option("password", "website")
+.option("dbtable", s"(SELECT EMP, TRIM(REGEXP_REPLACE(REQUEST, '([[:space:]][[:space:]]+)|([[:cntrl:]]+)', ' ')) as REQUEST, 'south' AS DATACENTER, '${ds}' as ds from Javachain_Oracle.Javachain_log WHERE log_timestamp >= TO_DATE((CURRENT_DATE - INTERVAL '1' DAY)) AND log_timestamp < TO_DATE((CURRENT_DATE - INTERVAL '0' DAY)))")
+.option("lowerBound",1L)
+.option("upperBound",100000L)
+.option("numPartitions",100)
+.option("fetchSize", "1000")
+.load()
+ 
+val SDC =df3.toDF
+val unionDC = TDC.unionAll(ODC).unionAll(SDC)
+unionDC.write.mode(SaveMode.Append).format("orc").insertInto("javachain_prd_tbls.javachain_log_tble")
+ 
+ 
+val insertData = sqlContext.sql(raw"""select emp, regexp_extract(request, 'ZIP_CODE=([\\d0-9\\s]+)', 1) as ZIP_CODE, regexp_extract(request, 'NameE=([a-zA-Z\\d0-9\\s]+)', 1) as Name, from_unixtime(unix_timestamp(ds, 'yyyyMMdd'), 'yyyy-MM-dd') as report_date, '$cur' as ingest_key from  mobile_diag_prd_tbls.V_MSS_DFM_TR_MVP_LOG where ds='$ds'""".stripMargin)
+ 
+insertData.write.mode(SaveMode.Append).format("orc").insertInto("javachain_prd_tbls.sqoopresults")
+ 
+sc.stop()
+}
+}
+
+--
+
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+#!/bin/bash
+ 
+DS=`date --date="1 day ago" +'%Y%m%d'`
+CURR_DATE=`date +'%m%d%Y'`
+ 
+ 
+ 
+export SPARK_CLASSPATH=/tmp/javachain/ojdbc6.jar
+ 
+/usr/hdp/2.5.3.0-37/spark2/bin/spark-submit --class com.javachain.javachain_sqoop --master yarn --driver-memory 10G --executor-memory 10G --num-executors 30  --jars hdfs://DISCPROD/javachain.com/lib/ojdbc6.jar /home/javachain/bin/javachain_scoop_2.11-2.0.jar $DS $CURR_DATE
+ 
+mailx -s "SPARK Sqoop is completed" anto@javachain.com
+
+--

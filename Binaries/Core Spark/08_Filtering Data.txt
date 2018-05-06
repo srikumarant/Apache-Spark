@@ -1,0 +1,20 @@
+
+- filter is the API to filter the data from input RDD
+- It takes anonymous function which returns true or false
+- All those elements on which anonymous function returns true, such elements will be copied to output RDD
+- Output RDD is typically subset of input RDD
+
+val orders = sc.textFile("/user/sri/sqoop_import/retail_db/orders")
+orders.take(10).foreach(println)
+
+// 21, 2013-07-25 00:00:00.0, 11599, CLOSED
+
+orders.filter(order => order.split(",")(3) == "COMPLETE")
+orders.map(order => order.split(",")(3)).distinct.collect.foreach(println)
+
+val ordersFiltered = orders.filter(order => {
+  val o = order.split(",")
+  (o(3) == "COMPLETE" || o(3) == "CLOSED") && (o(1).contains("2013-09"))
+})
+ordersFiltered.take(10).foreach(println)
+ordersFiltered.count

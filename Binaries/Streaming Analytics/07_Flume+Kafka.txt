@@ -1,0 +1,47 @@
+
+Flume -> Kafka
+
+//01
+# wskafka.conf: A single-node Flume configuration
+# to read data from webserver logs and publish
+# to kafka topic
+
+# Agent
+wk.sources = ws
+wk.channels = mem
+wk.sinks = kafka
+
+# Sources
+wk.sources.ws.type = exec
+wk.sources.ws.command = tail -F /opt/gen_logs/logs/access.log
+
+# Channel
+wk.channels.mem.type = memory
+wk.channels.mem.capacity = 1000
+wk.channels.mem.transactionCapacity = 100
+
+# Sink
+wk.sinks.kafka.type = org.apache.flume.sink.kafka.KafkaSink
+wk.sinks.kafka.brokerList = nn01.com:6667,nn02.com:6667,rm01.com:6667
+wk.sinks.kafka.topic = fkdemodg
+
+# Source -> Channel -> Sink
+wk.sources.ws.channels = mem
+wk.sinks.kafka.channel = mem
+
+flume-ng agent --name wk --conf-file /home/sri/flume_demo/wslogstokafka/wskafka.conf
+
+--
+
+//02
+kafka-console-consumer.sh \
+  --zookeeper nn01.com:2181,nn02.com:2181,rm01.com:2181 \
+  --topic fkdemodg \
+  --from-beginning
+
+--
+
+//03
+ssh root@nn02.com "ls -ltr /hdp*/kafka-logs|grep fkdemodg"
+
+--

@@ -1,0 +1,94 @@
+
+/--Row Level Transformations--/
+
+//2013-07-25 00:00:00.0
+select cast(concat(substr(order_date, 1, 4), substr(order_date, 6, 2)) as int)
+from orders
+limit 10;
+//201307
+
+select cast(date_format(order_date, 'YYYYMM') as int) 
+from orders
+limit 10;
+
+/--Joining Data--/
+
+select o.*, c.*
+from orders o, customers c
+where o.order_customer_id = c.customer_id
+limit 10;
+
+select o.*, c.*
+from orders o join customers c
+on o.order_customer_id = c.customer_id
+limit 10;
+
+select o.*, c.*
+from customers c left outer join orders o 
+on o.order_customer_id = c.customer_id
+where o.order_customer_id is null;
+
+/--Aggregations--/
+
+select o.order_id, o.order_date, o.order_status, round(sum(oi.order_item_subtotal), 2) order_revenue
+from orders o join order_items oi
+     on o.order_id = oi.order_item_order_id
+where o.order_status in ('COMPLETE', 'CLOSED')
+group by o.order_id, o.order_date, o.order_status
+having sum(oi.order_item_subtotal) >= 1000;
+
+/--Sorting--/
+
+select o.order_id, o.order_date, o.order_status, round(sum(oi.order_item_subtotal), 2) order_revenue
+from orders o join order_items oi
+     on o.order_id = oi.order_item_order_id
+where o.order_status in ('COMPLETE', 'CLOSED')
+group by o.order_id, o.order_date, o.order_status
+having sum(oi.order_item_subtotal) >= 1000
+order by o.order_date, order_revenue desc;
+
+Reducer:
+25-10-2017 10000
+25-10-2017 9000
+28-11-2017 8000
+
+select o.order_id, o.order_date, o.order_status, round(sum(oi.order_item_subtotal), 2) order_revenue
+from orders o join order_items oi
+     on o.order_id = oi.order_item_order_id
+where o.order_status in ('COMPLETE', 'CLOSED')
+group by o.order_id, o.order_date, o.order_status
+having sum(oi.order_item_subtotal) >= 1000
+distribute by o.order_date sort by o.order_date, order_revenue desc;
+
+Reducer-1:
+25-10-2017 10000
+25-10-2017 9000
+
+Reducer-2:
+28-11-2017 8000
+
+select o.order_id, o.order_date, o.order_status, round(sum(oi.order_item_subtotal), 2) order_revenue
+from orders o join order_items oi
+     on o.order_id = oi.order_item_order_id
+where o.order_status in ('COMPLETE', 'CLOSED')
+group by o.order_id, o.order_date, o.order_status
+having sum(oi.order_item_subtotal) >= 1000
+cluster by o.order_date, order_revenue desc;
+
+/--Set Operations--/
+
+select 1, "Hello"
+union all
+select 2, "World"
+union all
+select 1, "Hello"
+union all
+select 1, "World";
+
+select 1, "Hello"
+union
+select 2, "World"
+union
+select 1, "Hello"
+union
+select 1, "World";

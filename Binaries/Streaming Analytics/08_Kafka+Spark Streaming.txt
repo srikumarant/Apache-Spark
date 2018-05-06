@@ -1,0 +1,85 @@
+
+01. Receiver-based Approach
+02. Direct Approach
+
+//Flume -> Kafka -> Spark -> HDFS
+
+//01
+build.sbt
+
+name := "retail"
+version := "1.0"
+scalaVersion := "2.10.6"
+
+libraryDependencies += "org.apache.spark" % "spark-core_2.10" % "1.6.3"
+libraryDependencies += "org.apache.spark" % "spark-streaming_2.10" % "1.6.3"
+libraryDependencies += "org.apache.spark" % "spark-streaming-flume_2.10" % "1.6.3"
+libraryDependencies += "org.apache.spark" % "spark-streaming-flume-sink_2.10" % "1.6.3"
+libraryDependencies += "org.scala-lang" % "scala-library" % "2.10.6"
+libraryDependencies += "org.apache.commons" % "commons-lang3" % "3.3.2"
+libraryDependencies += "org.apache.spark" % "spark-streaming-kafka_2.10" % "1.6.3"
+
+//02
+
+import org.apache.spark.SparkConf
+import org.apache.spark.streaming.{StreamingContext,Seconds}
+import org.apache.spark.streaming.kafka._
+import kafka.serializer.StringDecoder
+
+object KafkaStreamingDepartmentCount {
+  def main(args: Array[String]) {
+    val conf = new SparkConf().
+      setAppName("Kafka Streaming Word Count").
+      setMaster(args(0))
+    val ssc = new StreamingContext(conf, Seconds(30))
+    
+    val kafkaParams = Map[String, String]("metadata.broker.list" -> "nn01.com:6667, nn02.com:6667, rm01.com:6667")
+    val topicSet = Set("fkdemodg")
+    val stream = KafkaUtils.
+      createDirectStream[String, String, StringDecoder, StringDecoder](ssc, kafkaParams, topicSet)
+
+    val messages = stream.map(s => s._2)
+
+    val departmentMessages = messages.
+      filter(msg => {
+        val endPoint = msg.split(" ")(6)
+        endPoint.split("/")(1) == "department"
+      })
+
+    val departments = departmentMessages.
+      map(rec => {
+        val endPoint = rec.split(" ")(6)
+        (endPoint.split("/")(2), 1)
+      })
+
+    val departmentTraffic = departments.
+      reduceByKey((total, value) => total + value)
+
+    departmentTraffic.saveAsTextFiles("/user/sri/deptwisetraffic/cnt")
+
+    ssc.start()
+    ssc.awaitTermination()
+
+  }
+}
+
+//03
+sbt package
+ 
+//04
+flume-ng agent --name wk --conf-file /home/sri/flume_demo/wslogstokafka/wskafka.conf
+
+//05
+kafka-console-consumer.sh \
+  --zookeeper nn01.com:2181,nn02.com:2181,rm01.com:2181 \
+  --topic fkdemodg \
+  --from-beginning
+
+//06
+spark-submit \
+ --class KafkaStreamingDepartmentCount \
+ --master yarn \
+ --conf spark.ui.port=12689 \
+ --jars "/usr/hdp/2.5.0.0-1245/kafka/libs/kafka_2.10-0.8.2.1.jar, /usr/hdp/2.5.0.0-1245/kafka/libs/spark-streaming-kafka_2.10-1.6.2.jar, /usr/hdp/2.5.0.0-1245/kafka/libs/metrics-core-2.2.0.jar" \
+ retail_2.10-1.0.jar yarn-client
+

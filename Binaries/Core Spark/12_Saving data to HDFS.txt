@@ -1,0 +1,45 @@
+
+- RDD can be saved into text file or sequence file
+- Data Frames can be saved into other file formats
+
+//Save RDD In text file format
+
+- saveAsTextFile
+- saveAsSequenceFile
+- saveAsNewAPIHadoopFile
+- saveAsObjectFile
+
+val orders = sc.textFile("/user/sri/sqoop_import/retail_db/orders")
+
+val orderCountByStatus = orders.
+	map(order => (order.split(",")(3), 1)).
+	reduceByKey((total, element) => total + element)
+
+orderCountByStatus.
+	map(rec => rec._1 + "\t" + rec._2)
+	saveAsTextFile("/user/sri/order_count_by_status")
+
+//Saving RDD – Compression
+
+- Compression codecs defined in /etc/hadoop/conf/core-site.xml
+
+orderCountByStatus.
+	saveAsTextFile("/user/sri/order_count_by_status_snappy", classof[org.apache.hadoop.io.compress.SnappyCodec])
+
+sc.textFile("/user/sri/order_count_by_status_snappy").collect.foreach(println)
+
+//Saving into different file formats using data frame
+
+- json
+- parquet
+- orc
+- text
+- csv
+- avro
+
+val ordersDF = sqlContext.read.json("/user/sri/sqoop_import/retail_db_json/orders")
+ordersDF.save("/user/sri/sqoop_import/retail_db_parquet", "parquet")
+ordersDF.write.orc("/user/sri/sqoop_import/retail_db_orc")
+
+sqlContext.load("/user/sri/sqoop_import/retail_db_orc", "orc").show
+sqlContext.read.orc("/user/sri/sqoop_import/retail_db_orc").show

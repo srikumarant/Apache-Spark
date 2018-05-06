@@ -1,0 +1,185 @@
+
+- Total aggregations – collect, reduce
+- By Key aggregations – reduceByKey and aggregateByKey
+
+/---Actions---/
+
+//1,2013-07-25 00:00:00.0,11599,CLOSED
+val orders = sc.textFile("/user/sri/sqoop_import/retail_db/orders")
+//1,1,957,1,299.98,299.98
+val orderItems = sc.textFile("/user/sri/sqoop_import/retail_db/orderItems")
+
+//CLOSED
+orders.map(order => (order.split(",")(3), "")).countByKey.foreach(println)
+
+//299.98
+val orderItemsRevenue = orderItems.map(oi => oi.split(",")(4).toFloat)
+
+orderItemsRevenue.reduce((total, revenue) => total + revenue)
+val orderItemsMaxRevenue = orderItemsRevenue.reduce((max, revenue) => {
+  if(max < revenue) revenue else max
+})
+
+
+/---groupByKey---/
+- groupByKey can be used for aggregations, but should be given low priority as it does not use combiner
+
+val orderItems = sc.textFile("/user/sri/sqoop_import/retail_db/orderItems")
+
+//(2,199.99)
+//(2,250.99)
+//(2,129.99)
+val orderItemsMap = orderItems.map(oi => (oi.split(",")(1).toInt, oi.split(",")(4).toFloat))
+
+//(2, CompactBuffer(199.99, 250.99, 129.99))
+val orderItemsGBK = orderItemsMap.groupByKey
+
+//(2, sum[199.99, 250.99, 129.99])
+//(2, 580.97)
+orderItemsGBK.map(rec => (rec._1, rec._2.toList.sum))
+
+//(2,[250.99, 199.99, 129.99])
+//(2,250.99)
+//(2,199.99)
+//(2,129.99)
+val ordersSortedByRevenue = orderItemsGBK.flatMap(rec => {
+ rec._2.toList.sortBy(o => -o).map(k => (rec._1, k))
+})
+
+
+/---Combiner---/
+- Computing intermediate values and then using intermediate values to compute final values is called combiner.
+
+
+/---reduceByKey---/
+- reduceByKey uses combiner
+- It is used when logic to compute intermediate values and logic to compute final value using intermediate values are same
+
+val orderItems = sc.textFile("/user/sri/sqoop_import/retail_db/orderItems")
+
+//(2,250.99)
+//(2,199.99)
+//(2,129.99)
+val orderItemsMap = orderItems.map(oi => (oi.split(",")(1).toInt, oi.split(",")(4).toFloat))
+
+//(250.99, 199.99) => 250.99 + 199.99 = 450.98
+//                                     (450.98, 129.99) => 450.98 + 129.99 = 580.97
+//                                                                          (2, 580.97)
+val revenuePerOrderId = orderItemsMap.reduceByKey((total, revenue) => total + revenue)
+
+//(250.99, 199.99) => 250.99 > 199.99 = 199.99
+//                                      (199.99, 129.99) => 199.99 > 129.99 = 129.99
+//                                                                           (2, 129.99)
+val minRevenuePerOrderId = orderItemsMap.reduceByKey((min, revenue) => if(min > revenue) revenue else min)
+
+minRevenuePerOrderId.sortByKey.take(10).foreach(println)
+
+
+/---aggregateByKey---/
+- aggregateByKey uses combiner
+- It is used when logic to compute intermediate values and logic to compute final value using intermediate values are not same
+--Initialize value – driven by output value type
+--Combine function or seqOp – 2 arguments
+      first argument  – driven by output value type
+      second argument – driven by input value type
+--Reduce function or combineOp – 2 arguments
+      arguments       – driven by output value type
+
+//(order_id, order_item_subtotal)
+//(2, 250.99) Part-1
+//(2, 199.99) Part-1
+//(2, 129.99) Part-2
+val orderItemsMap = orderItems.map(oi => (oi.split(",")(1).toInt, oi.split(",")(4).toFloat))
+
+//(order_id, (order_revenue, max_order_item_subtotal))
+//(2, (580.97, 250.99))
+//input - float
+//output - tuple
+val revenueAndMaxPerProductId = orderItemsMap.
+
+//                  output
+  aggregateByKey((0.0f, 0.0f))(
+
+//   output, input
+//  (                , 250.99) => (0.0    + 250.99, 250.99 > 0.0    = 250.99) = (250.99, 250.99)
+//  ((250.99, 250.99), 199.99) => (250.99 + 199.99, 199.99 > 250.99 = 250.99) = (450.99, 250.99)
+    (inter, subtotal) => (inter._1 + subtotal, if(subtotal > inter._2) subtotal else inter._2),
+    
+//   output, output
+//  (                , (450.99, 250.99)) => (  0.0  + 450.99,   0.0  > 250.99 = 250.99) = (450.99, 250.99)
+//  ((450.99, 250.99), (129.99, 250.99)) => (450.99 + 129.99, 250.99 > 250.99 = 250.99) = (580.97, 250.99)
+    (total, inter) => (total._1 + inter._1, if(total._2 > inter._2) total._2 else inter._2)
+  )
+
+
+/---sortByKey---/
+
+val products = sc.textFile("/user/sri/sqoop_import/retail_db/products")
+val productsMap = products.
+  filter(product => product.split(",")(4) != "").
+  map(product => ((product.split(",")(1).toInt, -product.split(",")(4).toFloat), product))
+val productsSortedByCategoryId = productsMap.sortByKey().
+  map(rec => rec._2)
+
+
+/---Ordering---/
+
+val products = sc.textFile("/user/sri/sqoop_import/retail_db/products")
+val productsMap = products.
+  filter(product => product.split(",")(4) != "").
+  map(product => (product.split(",")(4).toFloat, product))
+val productsSortedByPrice = productsMap.sortByKey(false)   //false - decending order
+productsSortedByPrice.take(10).foreach(println)
+
+val products = sc.textFile("/user/sri/sqoop_import/retail_db/products")
+products.
+  filter(product => product.split(",")(4) != "").
+  takeOrdered(10)(Ordering[Float].reverse.on(product => product.split(",")(4).toFloat)).
+  foreach(println)
+
+
+/---Ranking---/
+
+val products = sc.textFile("/user/sri/sqoop_import/retail_db/products")
+
+//(K1, A, B, C, M, N)
+//(K1, X, Y, Z, T, R)
+//(K1, L, M, N, O, R)
+//(K2, D, E, F, Q, F)
+//(K2, U, V, W, X, C)
+val productsMap = products.
+  filter(product => product.split(",")(4) != "").
+  map(product => (product.split(",")(1).toInt, product))
+
+//(K1, CompactBuffer(A, B, C, M, N, X, Y, Z, T, R, L, M, N, O, R))
+//(K2, CompactBuffer(D, E, F, Q, F, U, V, W, X, C))
+val productsGroupByCategory = productsMap.groupByKey
+
+//CompactBuffer(A, B, C, M, N, X, Y, Z, T, R, L, M, N, O, R)
+val productsIterable = productsGroupByCategory.first._2
+
+//A, B, C, M, N
+//X, Y, Z, T, R
+//L, M, N, O, R
+productsIterable.take(10).foreach(println)
+
+def getTopNPricedProducts(productsIterable: Iterable[String], topN: Int): Iterable[String] = {
+
+  //N, R, R -> (N, R) -> [N, R]
+  val productPrices = productsIterable.map(p => p.split(",")(4).toFloat).toSet
+  val topNPrices = productPrices.toList.sortBy(p => -p).take(topN)
+  
+  //X, Y, Z, T, R
+  //L, M, N, O, R
+  //A, B, C, M, N
+  val productsSorted = productsIterable.toList.sortBy(product => -product.split(",")(4).toFloat)
+  val minOfTopNPrices = topNPrices.min
+
+  val topNPricedProducts = productsSorted.takeWhile(product => product.split(",")(4).toFloat >= minOfTopNPrices)
+
+  topNPricedProducts
+}
+
+getTopNPricedProducts(productsIterable, 3).foreach(println)
+
+val top3PricedProductsPerCategory = productsGroupByCategory.flatMap(rec => getTopNPricedProducts(rec._2, 3))

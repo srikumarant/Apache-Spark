@@ -1,0 +1,128 @@
+
+//01
+# sdc.conf: A multiplex flume configuration
+# Source: log file
+# Sink 1: ""Unprocessed data to HDFS""
+# Sink 2: Spark
+
+
+# Source -> Channel-1 -> Sink-1 -> HDFS
+#           Channel-2 -> Sink-2 -> Spark
+
+
+# Agent
+sdc.sources = ws
+sdc.channels = hdmem sparkmem
+sdc.sinks = hd spark
+
+# Source
+sdc.sources.ws.type = exec
+sdc.sources.ws.command = tail -F /opt/gen_logs/logs/access.log
+
+# Channel-1
+sdc.channels.hdmem.type = memory
+sdc.channels.hdmem.capacity = 1000
+sdc.channels.hdmem.transactionCapacity = 100
+
+# Channel-2
+sdc.channels.sparkmem.type = memory
+sdc.channels.sparkmem.capacity = 1000
+sdc.channels.sparkmem.transactionCapacity = 100
+
+# Sink-1
+sdc.sinks.hd.type = hdfs
+sdc.sinks.hd.hdfs.path = hdfs://nn01.com:8020/user/sri/flume_demo
+sdc.sinks.hd.hdfs.filePrefix = FlumeDemo
+sdc.sinks.hd.hdfs.fileSuffix = .txt
+sdc.sinks.hd.hdfs.rollInterval = 120 #Seconds
+sdc.sinks.hd.hdfs.rollSize = 1048576 #KB
+sdc.sinks.hd.hdfs.rollCount = 100    #Count 
+sdc.sinks.hd.hdfs.fileType = DataStream
+
+# Sink-2
+sdc.sinks.spark.type = org.apache.spark.streaming.flume.sink.SparkSink
+sdc.sinks.spark.hostname = gw01.com
+sdc.sinks.spark.port = 8123
+
+# Source -> Channel -> Sink
+sdc.sources.ws.channels = hdmem sparkmem
+sdc.sinks.hd.channel = hdmem
+sdc.sinks.spark.channel = sparkmem
+
+--
+
+//02
+flume-ng agent -n sdc -f sdc.conf
+
+--
+
+//03
+build.sbt
+
+name := "retail"
+version := "1.0"
+scalaVersion := "2.10.6"
+
+libraryDependencies += "org.apache.spark" % "spark-core_2.10" % "1.6.3"
+libraryDependencies += "org.apache.spark" % "spark-streaming_2.10" % "1.6.3"
+libraryDependencies += "org.apache.spark" % "spark-streaming-flume_2.10" % "1.6.3"
+libraryDependencies += "org.apache.spark" % "spark-streaming-flume-sink_2.10" % "1.6.3"
+libraryDependencies += "org.scala-lang" % "scala-library" % "2.10.6"
+libraryDependencies += "org.apache.commons" % "commons-lang3" % "3.3.2"
+
+--
+
+//04
+sbt package
+
+--
+
+//05
+import org.apache.spark.SparkConf
+import org.apache.spark.streaming.{StreamingContext,Seconds}
+import org.apache.spark.streaming.flume._
+
+object FlumeStreamingDepartmentCount {
+  def main(args: Array[String]) {
+    val conf = new SparkConf().
+      setAppName("Flume Streaming Word Count").
+      setMaster(args(0))
+    val ssc = new StreamingContext(conf, Seconds(30))
+
+    val stream = FlumeUtils.createPollingStream(ssc, args(1), args(2).toInt)
+    val messages = stream.
+      map(s => new String(s.event.getBody.array()))
+
+    val departmentMessages = messages.
+      filter(msg => {
+        val endPoint = msg.split(" ")(6)
+        endPoint.split("/")(1) == "department"
+      })
+
+    val departments = departmentMessages.
+      map(rec => {
+        val endPoint = rec.split(" ")(6)
+        (endPoint.split("/")(2), 1)
+      })
+
+    val departmentTraffic = departments.
+      reduceByKey((total, value) => total + value)
+    departmentTraffic.saveAsTextFiles("/user/sri/deptwisetraffic/cnt")
+
+    ssc.start()
+    ssc.awaitTermination()
+
+  }
+}
+
+--
+
+//06
+spark-submit \
+  --class FlumeStreamingDepartmentCount \
+  --master yarn \
+  --conf spark.ui.port=12986 \
+  --jars "/usr/hdp/2.5.0.0-1245/spark/lib/spark-streaming-flume-sink_2.10-1.6.2.jar,/usr/hdp/2.5.0.0-1245/spark/lib/spark-streaming-flume_2.10-1.6.2.jar,/usr/hdp/2.5.0.0-1245/flume/lib/commons-lang3-3.5.jar,/usr/hdp/2.5.0.0-1245/flume/lib/flume-ng-sdk-1.5.2.2.5.0.0-1245.jar" \
+  retail_2.10-1.0.jar yarn-client gw01.com 8123
+
+--

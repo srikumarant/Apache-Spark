@@ -1,0 +1,106 @@
+
+show functions;
+
+substr 
+substring
+instr
+like
+rlike
+length
+lcase
+lower
+ucase
+upper
+initcap
+trim
+ltrim
+rtrim
+lpad
+rpad
+split
+
+current_date
+current_timestamp
+date_add
+date_format
+date_sub
+datediff
+day
+dayofmonth
+to_date
+to_unix_timestamp
+to_utc_timestamp
+from_unixtime
+from_utc_timestamp
+minute
+month
+months_between
+next_day
+
+describe function length;
+
+/--String--/
+
+select length('Hello');
+select order_status, length(order_status) from orders limit 10;
+
+select substr('Hello', 3, 1);
+ll
+
+select substr('Hello', -3, 1);
+ll
+
+select instr('Hello How', ' ');
+1
+
+select lcase("Hello");
+hello
+
+select ucase("Hello");
+HELLO
+
+select lpad(12, 3, '0');
+012
+
+select cast(substr(order_date, 6, 2) as int) from orders limit 10;
+7
+7
+
+select split("Hello World", ' ');
+["Hello", "World"]
+
+select index(split("Hello World", ' '), 1);
+World
+
+/--Date--/ 
+
+select date_format(current_date, 'y');
+2018
+
+select date_format(current_date, 'D');
+280
+
+select to_unix_timestamp(current_timestamp);
+1507421802
+
+select from_unixtime(1507421802);
+2017-10-07 20:16:42
+
+select to_date(from_unixtime(1507421802));
+2017-10-07
+
+/--Aggregate--/
+
+select count(*) from orders;
+
+select sum(order_item_subtotal) from order_items;
+
+/--Case--/
+
+select order_status,
+       case
+            when order_status IS NULL then 'Status Missing'  
+            when order_status IN ('CLOSED', 'COMPLETE') then 'No Action' 
+            when order_status IN ('ON_HOLD', 'PAYMENT_REVIEW', 'PENDING', 'PENDING_PAYMENT', 'PROCESSING') then 'Pending Action'
+            else 'Risky'
+       end from orders limit 10;

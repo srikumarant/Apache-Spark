@@ -1,0 +1,7 @@
+
+          Flume/Kafka      Spark Streaming
+                           /Flink/Storm 
+Web Logs -------------> X -----------------> HDFS
+
+
+

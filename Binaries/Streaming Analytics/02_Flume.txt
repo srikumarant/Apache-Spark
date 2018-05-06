@@ -1,0 +1,93 @@
+
+		|-----------------------------|
+web server ---> | Source --> Channel --> Sink | ---> HDFS
+		|-----------------------------|
+                              Agent
+
+Flows:
+
+01. Linear
+
+A1 -> A2
+
+02. Consolidation
+
+A1 -->
+A2 --> A4
+A3 --> 
+
+03. Multiplex
+
+A1 --> HDFS
+   --> JMS
+   --> A2
+
+--
+
+example.conf:
+
+# Name the components on this agent
+a1.sources = r1
+a1.sinks = k1
+a1.channels = c1
+
+# Describe/configure the source
+a1.sources.r1.type = netcat
+a1.sources.r1.bind = localhost
+a1.sources.r1.port = 44444
+
+# Use a channel which buffers events in memory
+a1.channels.c1.type = memory
+a1.channels.c1.capacity = 1000
+a1.channels.c1.transactionCapacity = 100
+
+# Describe the sink
+a1.sinks.k1.type = logger
+
+# Bind the source and sink to the channel
+a1.sources.r1.channels = c1
+a1.sinks.k1.channel = c1
+
+flume-ng agent --name a1 --conf-file /home/sri/flume_demo/example.conf
+
+telnet localhost 44444
+
+--
+
+wshdfs.conf:
+
+# Name the components on this agent
+wh.sources = ws
+# wh.sinks = k1
+wh.sinks = hd
+wh.channels = mem
+
+# Describe/configure the source
+wh.sources.ws.type = exec
+wh.sources.ws.command = tail -f /opt/gen_logs/logs/access.log
+
+# Use a channel which buffers events in memory
+wh.channels.mem.type = memory
+wh.channels.mem.capacity = 1000		#TransactionCapacity < Capacity
+wh.channels.mem.transactionCapacity = 100
+
+# Describe the sink
+# wh.sinks.k1.type = logger
+wh.sinks.hd.type = hdfs
+wh.sinks.hd.hdfs.path = hdfs://nn01.itversity.com:8020/user/sri/flume_demo
+wh.sinks.hd.hdfs.filePrefix = FlumeDemo
+wh.sinks.hd.hdfs.fileSuffix = .txt
+wh.sinks.hd.hdfs.rollInterval = 120 	#Seconds
+wh.sinks.hd.hdfs.rollSize = 1048576	#KB
+wh.sinks.hd.hdfs.rollCount = 100    	#Lines
+wh.sinks.hd.hdfs.fileType = DataStream
+
+# Bind the source and sink to the channel
+wh.sources.ws.channels = mem
+wh.sinks.k1.channel = mem
+
+flume-ng agent --name wh --conf-file /home/sri/flume_demo/wshdfs.conf
+
+--
+
+

@@ -1,0 +1,5 @@
+
+spark-sql --master yarn \
+--conf spark.ui.port=12345
+
+show databases

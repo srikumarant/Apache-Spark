@@ -1,0 +1,48 @@
+
+              Stream 
+            Processors
+                 |
+                 |
+Producer -->     |    --> Consumer
+               Kafka    
+Producer -->  Cluster --> Consumer
+                 |
+Producer -->     |    --> Consumer
+                 |
+                 DB
+
+                               Consumer Group
+Producer -->     Kafka     -->    Consumer-1
+ (msg)                             Offset
+              Broker-1            Consumer-2
+              Topic-1              Offset
+               Partition-1
+                 Offset
+               Partition-n
+                 Offset
+
+                ZooKeeper
+
+--
+
+#Topics
+kafka-topics.sh --create \
+   --zookeeper nn01.com:2181,nn02.com:2181,rm01.com:2181 \
+   --replication-factor 1 \
+   --partitions 1 \
+   --topic kafkademodg
+
+kafka-topics.sh --list \
+   --zookeeper nn01.com:2181,nn02.com:2181,rm01.com:2181 \
+   --topic kafkademodg
+
+#Producer
+kafka-console-producer.sh \
+  --broker-list nn01.com:6667,nn02.com:6667,rm01.com:6667 \
+  --topic kafkademodg
+
+#Consumer
+kafka-console-consumer.sh \
+  --zookeeper nn01.com:2181,nn02.com:2181,rm01.com:2181 \
+  --topic kafkademodg \
+  --from-beginning

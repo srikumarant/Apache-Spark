@@ -1,0 +1,29 @@
+
+- Perform row level transformations where one record transforms into another record
+- Number of records in input RDD and output RDD will be equal
+- map is typically followed by other APIs used for
+   - joining the data
+   - performing aggregations
+   - sorting etc
+
+val orders = sc.textFile("/user/sri/sqoop_import/retail_db/orders")
+// 21, 2013-07-25 00:00:00.0, 11599, CLOSED -> 20130725 as Int
+val str = orders.first
+
+val orderDates = orders.map((str: String) => {
+                                             str.split(",")(1).substring(0, 10).replace("-", "").toInt
+                                             })
+orderDates.take(10).foreach(println)
+
+val ordersPairedRDD = orders.map(order => {
+                                          val o = order.split(",")
+                                          (o(0).toInt, o(1).substring(0, 10).replace("-", "").toInt)             
+                                          })
+
+ordersPairedRDD.take(10).foreach(println)
+
+val ordersItems = sc.textFile("/user/sri/sqoop_import/retail_db/order_items")
+val ordersItemsPairedRDD = orderItems.map(orderItem => {
+                                                       (orderItem.split(",")(1).toInt, orderItem)
+                                                       })
+ordersItemsPairedRDD.take(10).foreach(println)

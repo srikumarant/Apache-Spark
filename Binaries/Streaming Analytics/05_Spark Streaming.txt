@@ -1,0 +1,130 @@
+
+- StreamingContext
+- Stop SparkContext before Starting StreamingContext
+
+import org.apache.spark.streaming._
+import org.apache.spark.SparkConf
+
+sc.stop
+val conf = new SparkConf().setAppName("streaming").setMaster("yarn-client")
+val ssc = new StreamingContext(conf, Seconds(10))
+
+//netcat
+nc localhost 9999
+Hello!
+
+nc -lk 9999
+Hello!
+
+--
+
+/--Word Count--/
+
+//01
+build.sbt
+
+name := "retail"
+version := "1.0"
+scalaversion := "2.10.6"
+
+libraryDependencies += "org.apache.spark" % "spark-core_2.10" % "1.6.3"
+libraryDependencies += "org.apache.spark" % "spark-streaming_2.10" % "1.6.3"
+
+//02
+sbt console
+
+import org.apache.spark.streaming._
+import org.apache.spark.SparkConf
+
+sc.stop
+val conf = new SparkConf().setAppName("streaming").setMaster("yarn-client")
+val ssc = new StreamingContext(conf, Seconds(10))
+
+val lines = ssc.socketTextStream("localhost", 9999)
+val words = lines.flatMap(line => line.split(" "))
+val tuples = words.map(word => (word, 1))
+val wordCounts = tuples.reduceByKey((t, v) => t + v)
+
+wordCounts.print()
+
+ssc.start()
+ssc.awaitTermination()
+
+//03
+sbt package
+
+--
+
+//web service
+nc -lk {host} 9999
+
+//testing
+telnet {host} 9999
+
+spark-submit \
+	--class StreamingWordCount \
+	--master yarn \
+	--conf spark.ui.port=12567 \
+	retail_2.10-1.0.jar yarn-client {web service host} 9999
+
+--
+
+original DStream
+windowed DStream
+
+--
+
+/--Streaming Department Count--/
+
+import org.apache.spark.SparkConf
+import org.apache.spark.streaming.{StreamingContext, seconds}
+
+object StreamingDepartmentCount {
+ def main(args: Array[String]) {
+  val conf = new SparkConf().
+	setAppName("Streaming Word Count").
+	setMaster(args(0))
+  val ssc = new StreamingContext(conf, Seconds(30))
+  val messages = ssc.socketTextStream(args(1), args(2).toInt)
+  
+  //190.89.14.141 - - [01/Dec/2017:19:31:59 -0800] "GET /department/fan%20shop/categories HTTP/1.1" 
+  //             1 2 3                     4      5    6
+  //                                                     1
+
+  val departmentMessages = messages.
+	filter(msg => {
+		val endPoint = msg.split(" ")(6)
+		endPoint.split("/")(1) == "department"
+	}) 
+
+  //190.89.14.141 - - [01/Dec/2017:19:31:59 -0800] "GET /department/fan%20shop/categories HTTP/1.1"
+  //                                                     1          2
+  //(fan%20shop, 1)
+  
+  val departments = departmentMessages.
+	map(rec => {
+		val endPoint = rec.split(" ")(6)
+		(endPoint.split("/")(2), 1)
+	})
+  
+  //(fan%20shop,3)
+
+  val departmentTraffic = departments.
+	reduceByKey((total, value) => total + value)
+
+  departmentTraffic.saveAsTextFiles("/user/sri/deptwisetraffic/cnt")
+ }
+}
+
+//web server
+tail_logs.sh | nc -lk {host} 8123
+
+//testing
+telnet {web server host} 8123
+
+spark-submit \
+ --class StreamingDepartmentCount \
+ --master yarn \
+ --conf spark.ui.port=12678 \
+ retail_2.10-1.0.jar \
+ yarn-client {web server host} 8123

@@ -1,0 +1,6 @@
+
+                  (Sink)       (Consumer)
+Source ------> Flume ------> Kafka ------> Spark Stream ------> HDFS
+          (Source)   (Producer)
+
+

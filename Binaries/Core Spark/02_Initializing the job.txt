@@ -1,0 +1,25 @@
+/etc/spark/conf
+ - spark-defaults.conf
+ - spark-env.sh
+
+spark-shell --master yarn \
+--conf spark.ui.port=12345 \
+--conf spark.ui.enabled=true \
+--num-executors 1 \
+--executor-memory 512M
+
+sc
+sqlContext
+spark-shell --help
+
+hadoop fs -du -s -h /public/retail_db
+
+import org.apache.spark.{SparkConf,SparkContext}
+val conf = new SparkConf().setAppName("Daily Revenue").setMaster("yarn-client")
+val sc = new SparkContext(conf)
+sc.getConf.getAll.foreach(println)
+
+
+
+
+

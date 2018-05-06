@@ -1,0 +1,27 @@
+
+RDD - Resilient Distributed Dataset
+ - In-memory
+
+//Text file - HDFS
+val orders = sc.textFile("/user/sri/sqoop_import/retail_db/categories/part-m-00000") //Transformation 
+orders.first() //Action
+orders.count
+
+//Text file - Local File
+var productsRaw = scala.io.Source.fromFile("/usr/sri/part-m-00000").getLines.toList 
+var productRDD = sc.parallelize(productsRaw)
+productRDD.take(10).foreach(println)
+
+//Non-text file - HDFS
+val sqlContext = new org.apache.spark.sql.SQLContext(sc)
+val ordersDF = sqlContext.read.json("/user/sri/json/json.txt")
+ordersDF.show
+
+sqlContext.load("/user/sri/json/json.txt","json").show
+
+
+
+
+
+
+
